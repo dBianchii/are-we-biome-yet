@@ -1,0 +1,27 @@
+{
+	"name": "are-we-biome-yet",
+	"version": "0.0.1",
+	"description": "Are we Biome yet? -- Compare your eslint config to existing Biome configs",
+	"license": "MIT",
+	"type": "module",
+	"bin": {
+		"are-we-biome-yet": "./dist/index.js"
+	},
+	"scripts": {
+		"dev": "tsup --watch",
+		"start": "bun run dist/index.js",
+		"build": "tsup"
+	},
+	"dependencies": {
+		"commander": "^12.0.0",
+		"eslint": "^8.57.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.1.2",
+		"@types/bun": "latest",
+		"@typescript-eslint/eslint-plugin": "^8.38.0",
+		"@typescript-eslint/parser": "^8.38.0",
+		"tsup": "^8.0.0",
+		"typescript": "^5"
+	}
+}
