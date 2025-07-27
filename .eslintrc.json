@@ -5,17 +5,19 @@
 	},
 	"extends": ["eslint:recommended"],
 	"parserOptions": {
-		"ecmaVersion": 12,
+		"ecmaVersion": "latest",
 		"sourceType": "module"
 	},
 	"rules": {
 		"no-console": "warn",
-		"no-unused-vars": "error",
 		"prefer-const": "error",
-		"semi": ["error", "always"],
-		"quotes": ["error", "single"],
-		"no-var": "error",
-		"eqeqeq": "error",
-		"curly": "error"
+		"no-unused-vars": "off",
+		"@typescript-eslint/no-unused-vars": "error",
+		"@typescript-eslint/prefer-as-const": "error",
+		"@typescript-eslint/ban-ts-comment": "warn",
+		"@typescript-eslint/consistent-type-imports": "error",
+		"@typescript-eslint/no-array-constructor": "error",
+		"react/jsx-key": "error",
+		"import/no-duplicates": "error"
 	}
 }

@@ -6,12 +6,8 @@ const main = async () => {
 	const program = new Command()
 		.name("are-we-biome-yet")
 		.description("Compare your eslint config to existing Biome configs")
-		.version("0.0.1");
-
-	program
-		.command("analyze")
-		.description("Analyze ESLint rules in a project")
-		.argument("<path>", "Path to the file to analyze")
+		.version("0.0.1")
+		.argument("<path>", "Path to analyze")
 		.option("--json", "Output as JSON")
 		.action(analyzeProject);
 
