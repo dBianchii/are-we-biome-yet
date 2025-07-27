@@ -24,21 +24,38 @@ export const fetchBiomeRules = async (): Promise<BiomeRulesData> => {
 	const sources: string[] = [];
 
 	try {
-		for (const url of BIOME_SOURCES_URLS) {
+		const fetchPromises = BIOME_SOURCES_URLS.map(async (url) => {
 			logger.info(`Fetching Biome rules from: ${url}`);
 
-			const response = await fetch(url);
-			if (!response.ok) {
-				logger.error(`Failed to fetch ${url}: ${response.statusText}`);
-				continue;
+			try {
+				const response = await fetch(url);
+				if (!response.ok) {
+					logger.error(`Failed to fetch ${url}: ${response.statusText}`);
+					return null;
+				}
+
+				const content = await response.text();
+				const parsedData = parseBiomeMarkdown(content, url);
+
+				return {
+					mappings: parsedData.mappings,
+					exclusiveRules: parsedData.exclusiveRules,
+					source: url,
+				};
+			} catch (error) {
+				logger.error(`Error fetching ${url}: ${error}`);
+				return null;
 			}
+		});
 
-			const content = await response.text();
-			const parsedData = parseBiomeMarkdown(content, url);
+		const results = await Promise.all(fetchPromises);
 
-			allMappings.push(...parsedData.mappings);
-			allExclusiveRules.push(...parsedData.exclusiveRules);
-			sources.push(url);
+		for (const result of results) {
+			if (result) {
+				allMappings.push(...result.mappings);
+				allExclusiveRules.push(...result.exclusiveRules);
+				sources.push(result.source);
+			}
 		}
 
 		logger.info(`Found ${allMappings.length} ESLint → Biome rule mappings`);
