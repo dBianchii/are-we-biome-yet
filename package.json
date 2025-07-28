@@ -10,7 +10,10 @@
 	"scripts": {
 		"dev": "tsup --watch",
 		"start": "bun run dist/index.js",
-		"build": "tsup"
+		"build": "tsup",
+		"pub:beta": "bun run build && npm publish --tag beta",
+		"pub:next": "bun run build && npm publish --tag next",
+		"pub:release": "bun run build && npm publish"
 	},
 	"dependencies": {
 		"commander": "^12.0.0",
