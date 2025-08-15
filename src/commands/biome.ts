@@ -12,11 +12,31 @@ interface BiomeRulesData {
 	sources: string[];
 }
 
-const BIOME_SOURCES_URLS = [
-	"https://raw.githubusercontent.com/biomejs/website/refs/heads/main/src/content/docs/linter/css/sources.mdx",
-	"https://raw.githubusercontent.com/biomejs/website/refs/heads/main/src/content/docs/linter/javascript/sources.mdx",
-	"https://raw.githubusercontent.com/biomejs/website/refs/heads/main/src/content/docs/linter/json/sources.mdx",
-];
+// New interface for the Biome rules JSON structure
+interface BiomeRulesJson {
+	lints: {
+		languages: {
+			[key: string]: {
+				[key: string]: {
+					[key: string]: {
+						name: string;
+						link: string;
+						recommended?: boolean;
+						deprecated?: boolean;
+						sources?: Array<{
+							kind: string;
+							source: {
+								[key: string]: string;
+							};
+						}>;
+					};
+				};
+			};
+		};
+	};
+}
+
+const BIOME_RULES_URL = "https://biomejs.dev/metadata/rules.json";
 
 export const fetchBiomeRules = async (): Promise<BiomeRulesData> => {
 	const allMappings: BiomeRuleMapping[] = [];
@@ -24,39 +44,21 @@ export const fetchBiomeRules = async (): Promise<BiomeRulesData> => {
 	const sources: string[] = [];
 
 	try {
-		const fetchPromises = BIOME_SOURCES_URLS.map(async (url) => {
-			logger.info(`Fetching Biome rules from: ${url}`);
+		logger.info(`Fetching Biome rules from: ${BIOME_RULES_URL}`);
 
-			try {
-				const response = await fetch(url);
-				if (!response.ok) {
-					logger.error(`Failed to fetch ${url}: ${response.statusText}`);
-					return null;
-				}
-
-				const content = await response.text();
-				const parsedData = parseBiomeMarkdown(content, url);
-
-				return {
-					mappings: parsedData.mappings,
-					exclusiveRules: parsedData.exclusiveRules,
-					source: url,
-				};
-			} catch (error) {
-				logger.error(`Error fetching ${url}: ${error}`);
-				return null;
-			}
-		});
-
-		const results = await Promise.all(fetchPromises);
-
-		for (const result of results) {
-			if (result) {
-				allMappings.push(...result.mappings);
-				allExclusiveRules.push(...result.exclusiveRules);
-				sources.push(result.source);
-			}
+		const response = await fetch(BIOME_RULES_URL);
+		if (!response.ok) {
+			throw new Error(`Failed to fetch Biome rules: ${response.statusText}`);
 		}
+
+		const biomeRulesData = await response.json() as BiomeRulesJson;
+		
+		// Process the JSON structure to extract rule mappings
+		const { mappings, exclusiveRules } = parseBiomeRulesJson(biomeRulesData);
+		
+		allMappings.push(...mappings);
+		allExclusiveRules.push(...exclusiveRules);
+		sources.push(BIOME_RULES_URL);
 
 		logger.info(`Found ${allMappings.length} ESLint → Biome rule mappings`);
 
@@ -73,118 +75,37 @@ export const fetchBiomeRules = async (): Promise<BiomeRulesData> => {
 	}
 };
 
-function parseBiomeMarkdown(
-	content: string,
-	sourceUrl: string,
-): BiomeRulesData {
+function parseBiomeRulesJson(biomeRulesData: BiomeRulesJson): BiomeRulesData {
 	const mappings: BiomeRuleMapping[] = [];
 	const exclusiveRules: string[] = [];
 
-	const lines = content.split("\n");
-	let currentSection = "";
-	let inTable = false;
-
-	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i]?.trim() || "";
-
-		// Detect section headers
-		if (line.startsWith("### ")) {
-			currentSection = line.replace("### ", "").trim();
-			inTable = false;
-			continue;
-		}
-
-		// Detect Biome exclusive rules
-		if (line.startsWith("## Biome exclusive rules")) {
-			// Look for the list items after this header
-			for (
-				let j = i + 1;
-				j < lines.length && !lines[j]?.startsWith("## ");
-				j++
-			) {
-				const listItem = lines[j]?.trim() || "";
-				if (listItem.startsWith("- [")) {
-					const ruleMatch = listItem.match(/\[([^\]]+)\]/);
-					if (ruleMatch?.[1]) {
-						exclusiveRules.push(ruleMatch[1]);
+	// Process each language
+	for (const [language, languageRules] of Object.entries(biomeRulesData.lints.languages)) {
+		// Process each category within the language
+		for (const [category, categoryRules] of Object.entries(languageRules)) {
+			// Process each rule within the category
+			for (const [ruleName, ruleData] of Object.entries(categoryRules)) {
+				// Check if this rule has sources (indicating it's a mapping from another tool)
+				if (ruleData.sources && ruleData.sources.length > 0) {
+					for (const source of ruleData.sources) {
+						// Look for ESLint sources
+						if (source.source.eslint) {
+							mappings.push({
+								eslintRule: source.source.eslint,
+								biomeRule: ruleData.name,
+								source: `${language}/${category}`,
+							});
+						}
 					}
+				} else {
+					// This is a Biome-exclusive rule
+					exclusiveRules.push(ruleData.name);
 				}
 			}
-			continue;
-		}
-
-		// Detect table headers
-		if (line.includes("| ---- | ---- |")) {
-			inTable = true;
-			continue;
-		}
-
-		// Parse table rows - more flexible matching
-		if (
-			inTable &&
-			line.includes("|") &&
-			line.includes("[") &&
-			line.includes("](")
-		) {
-			const mapping = parseTableRow(line, currentSection);
-			if (mapping) {
-				mappings.push(mapping);
-			}
-		} else if (inTable && !line.includes("|") && line.length > 0) {
-			inTable = false;
 		}
 	}
 
-	return { mappings, exclusiveRules, sources: [sourceUrl] };
-}
-
-function parseTableRow(line: string, section: string): BiomeRuleMapping | null {
-	// Parse table row like: | [eslint-rule](url) |[biome-rule](url) |
-	// Split by | and filter out empty columns
-	const columns = line
-		.split("|")
-		.map((col) => col.trim())
-		.filter((col) => col.length > 0);
-
-	if (columns.length < 2) return null;
-
-	// Extract rule names from markdown links [rule-name](url)
-	const eslintMatch = columns[0]?.match(/\[([^\]]+)\]/);
-	const biomeMatch = columns[1]?.match(/\[([^\]]+)\]/);
-
-	if (!eslintMatch?.[1] || !biomeMatch?.[1]) return null;
-
-	const eslintRule = eslintMatch[1];
-	const biomeRule = biomeMatch[1];
-
-	// Skip if it's not a valid rule name
-	if (
-		!eslintRule ||
-		!biomeRule ||
-		eslintRule.includes("Rules name") ||
-		biomeRule.includes("Rules name")
-	) {
-		return null;
-	}
-
-	// Clean source name
-	const cleanSource = cleanSourceName(section);
-
-	return {
-		eslintRule,
-		biomeRule,
-		source: cleanSource,
-	};
-}
-
-function cleanSourceName(section: string): string {
-	// Clean up section names
-	return (
-		section
-			.replace(/Rules name.*$/i, "")
-			.replace(/\|/g, "")
-			.trim() || "ESLint"
-	);
+	return { mappings, exclusiveRules, sources: [BIOME_RULES_URL] };
 }
 
 export const findBiomeEquivalent = (
