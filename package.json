@@ -1,6 +1,6 @@
 {
 	"name": "are-we-biome-yet",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "Are we Biome yet? -- Compare your eslint config to existing Biome configs",
 	"license": "MIT",
 	"type": "module",
